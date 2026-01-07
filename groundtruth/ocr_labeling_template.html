@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <script src="https://assets.crowd.aws/crowd-html-elements.js"></script>
+    <style>
+        :root {
+            --primary-color: #232f3e;
+            --secondary-color: #ff9900;
+            --border-color: #d5dbdb;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+            font-family: 'Amazon Ember', Arial, sans-serif;
+        }
+
+        .image-panel {
+            flex: 3;
+            padding: 10px;
+            overflow: auto;
+        }
+
+        .annotation-panel {
+            flex: 1;
+            min-width: 300px;
+            max-width: 400px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-left: 1px solid var(--border-color);
+            overflow-y: auto;
+        }
+
+        .annotation-panel h3 {
+            margin: 0 0 15px 0;
+            color: var(--primary-color);
+            border-bottom: 2px solid var(--secondary-color);
+            padding-bottom: 10px;
+        }
+
+        .annotation-item {
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 12px;
+            margin-bottom: 10px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .annotation-item.active {
+            border-color: var(--secondary-color);
+            box-shadow: 0 0 0 2px rgba(255, 153, 0, 0.3);
+        }
+
+        .annotation-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .annotation-label {
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+
+        .annotation-coords {
+            font-size: 11px;
+            color: #666;
+        }
+
+        .text-input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .text-input:focus {
+            outline: none;
+            border-color: var(--secondary-color);
+        }
+
+        .type-select {
+            width: 100%;
+            padding: 6px;
+            margin-top: 8px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .delete-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 2px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+
+        .delete-btn:hover {
+            background: #c82333;
+        }
+
+        .stats {
+            background: var(--primary-color);
+            color: white;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-size: 13px;
+        }
+
+        .instructions {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 15px;
+            font-size: 12px;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #666;
+            padding: 20px;
+        }
+
+        crowd-bounding-box {
+            width: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <crowd-form>
+        <div class="container">
+            <!-- 左侧：图像标注区 -->
+            <div class="image-panel">
+                <crowd-bounding-box id="bbox-tool" name="boundingBoxes"
+                    src="{{ task.input.taskObject | grant_read_access }}" header="P&ID 图纸文字标注"
+                    labels="['text', 'equipment_id', 'dimension', 'tag', 'note']">
+                    <full-instructions header="P&ID 图纸 OCR 标注指南">
+                        <h3>标注目标</h3>
+                        <p>框选图纸中所有可识别的文字区域，并输入对应的文字内容。</p>
+
+                        <h3>标注类别</h3>
+                        <ul>
+                            <li><b>text</b> - 普通文字</li>
+                            <li><b>equipment_id</b> - 设备编号 (如 P-101, V-201)</li>
+                            <li><b>dimension</b> - 尺寸标注 (如 DN50, 2")</li>
+                            <li><b>tag</b> - 仪表标签 (如 FIC-101, TT-201)</li>
+                            <li><b>note</b> - 备注说明</li>
+                        </ul>
+
+                        <h3>标注规范</h3>
+                        <ol>
+                            <li>框选时尽量贴合文字边界，留少量边距</li>
+                            <li>倾斜文字按实际方向框选</li>
+                            <li>特殊符号使用约定编码：Φ→Φ, °→°, ±→±</li>
+                            <li>模糊不清的文字标注为 [unclear]</li>
+                            <li>每个独立文字块单独框选</li>
+                        </ol>
+
+                        <h3>跳过标注</h3>
+                        <ul>
+                            <li>纯图形符号（阀门、泵等设备图标）</li>
+                            <li>线条、箭头等装饰元素</li>
+                            <li>图框边界线</li>
+                        </ul>
+                    </full-instructions>
+
+                    <short-instructions>
+                        <p>1. 用矩形框选文字区域</p>
+                        <p>2. 选择合适的标签类别</p>
+                        <p>3. 在右侧面板输入文字内容</p>
+                    </short-instructions>
+                </crowd-bounding-box>
+            </div>
+
+            <!-- 右侧：文字输入面板 -->
+            <div class="annotation-panel">
+                <h3>📝 文字内容标注</h3>
+
+                <div class="instructions">
+                    <b>操作提示：</b>框选文字后，在下方输入对应的文字内容
+                </div>
+
+                <div class="stats" id="stats">
+                    已标注: <span id="count">0</span> 个区域
+                </div>
+
+                <div id="annotation-list">
+                    <div class="empty-state">
+                        请在左侧图像上框选文字区域
+                    </div>
+                </div>
+
+                <!-- 隐藏字段存储文字内容 -->
+                <input type="hidden" id="transcriptions" name="transcriptions" value="{}">
+            </div>
+        </div>
+
+        <script>
+            // 存储文字内容
+            let transcriptionData = {};
+
+            // 获取 bounding box 组件
+            const bboxTool = document.getElementById('bbox-tool');
+            const annotationList = document.getElementById('annotation-list');
+            const transcriptionsInput = document.getElementById('transcriptions');
+            const countSpan = document.getElementById('count');
+
+            // 监听标注变化
+            function updateAnnotationPanel() {
+                // 等待组件加载
+                setTimeout(() => {
+                    const annotations = bboxTool.value ? bboxTool.value.boundingBoxes : [];
+
+                    if (!annotations || annotations.length === 0) {
+                        annotationList.innerHTML = '<div class="empty-state">请在左侧图像上框选文字区域</div>';
+                        countSpan.textContent = '0';
+                        return;
+                    }
+
+                    countSpan.textContent = annotations.length;
+
+                    let html = '';
+                    annotations.forEach((ann, idx) => {
+                        const savedText = transcriptionData[idx] || '';
+                        const coords = `(${Math.round(ann.left)}, ${Math.round(ann.top)}) - ${Math.round(ann.width)}x${Math.round(ann.height)}`;
+
+                        html += `
+              <div class="annotation-item" data-index="${idx}">
+                <div class="annotation-header">
+                  <span class="annotation-label">区域 ${idx + 1} [${ann.label}]</span>
+                </div>
+                <div class="annotation-coords">${coords}</div>
+                <input type="text" 
+                       class="text-input" 
+                       data-index="${idx}"
+                       placeholder="输入文字内容..."
+                       value="${savedText}"
+                       onchange="updateTranscription(${idx}, this.value)"
+                       onfocus="highlightAnnotation(${idx})"
+                >
+                <select class="type-select" data-index="${idx}" onchange="updateType(${idx}, this.value)">
+                  <option value="">-- 文字类型 (可选) --</option>
+                  <option value="chinese">中文</option>
+                  <option value="english">英文</option>
+                  <option value="number">数字</option>
+                  <option value="mixed">混合</option>
+                  <option value="symbol">符号</option>
+                </select>
+              </div>
+            `;
+                    });
+
+                    annotationList.innerHTML = html;
+                }, 100);
+            }
+
+            // 更新文字内容
+            function updateTranscription(index, text) {
+                transcriptionData[index] = text;
+                transcriptionsInput.value = JSON.stringify(transcriptionData);
+            }
+
+            // 更新文字类型
+            function updateType(index, type) {
+                if (!transcriptionData.types) {
+                    transcriptionData.types = {};
+                }
+                transcriptionData.types[index] = type;
+                transcriptionsInput.value = JSON.stringify(transcriptionData);
+            }
+
+            // 高亮当前标注
+            function highlightAnnotation(index) {
+                document.querySelectorAll('.annotation-item').forEach((item, i) => {
+                    item.classList.toggle('active', i === index);
+                });
+            }
+
+            // 监听 bounding box 变化
+            if (bboxTool) {
+                // 使用 MutationObserver 监听变化
+                const observer = new MutationObserver(updateAnnotationPanel);
+                observer.observe(bboxTool, { attributes: true, childList: true, subtree: true });
+
+                // 定期检查更新
+                setInterval(updateAnnotationPanel, 500);
+            }
+
+            // 初始化
+            document.addEventListener('DOMContentLoaded', updateAnnotationPanel);
+        </script>
+    </crowd-form>
+</body>
+
+</html>
