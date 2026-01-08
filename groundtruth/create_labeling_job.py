@@ -83,6 +83,97 @@ def get_clients():
     }
 
 
+def create_label_category_config(s3_client, template_type: str = "detection"):
+    """创建标签类别配置文件"""
+    
+    # 不同模板的标签配置
+    label_configs = {
+        "detection": {
+            "document-version": "2018-11-28",
+            "labels": [
+                {"label": "valve", "label-metadata": {"type": "symbol", "description": "阀门"}},
+                {"label": "pump", "label-metadata": {"type": "symbol", "description": "泵"}},
+                {"label": "tank", "label-metadata": {"type": "symbol", "description": "储罐"}},
+                {"label": "heat_exchanger", "label-metadata": {"type": "symbol", "description": "换热器"}},
+                {"label": "compressor", "label-metadata": {"type": "symbol", "description": "压缩机"}},
+                {"label": "filter", "label-metadata": {"type": "symbol", "description": "过滤器"}},
+                {"label": "instrument", "label-metadata": {"type": "symbol", "description": "仪表"}},
+                {"label": "reducer", "label-metadata": {"type": "symbol", "description": "异径管"}},
+                {"label": "flange", "label-metadata": {"type": "symbol", "description": "法兰"}},
+                {"label": "pipe", "label-metadata": {"type": "symbol", "description": "管道"}},
+                {"label": "text_english", "label-metadata": {"type": "text", "description": "英文文字"}},
+                {"label": "text_chinese", "label-metadata": {"type": "text", "description": "中文文字"}},
+                {"label": "text_number", "label-metadata": {"type": "text", "description": "数字"}},
+                {"label": "text_mixed", "label-metadata": {"type": "text", "description": "混合文字"}},
+                {"label": "text_symbol", "label-metadata": {"type": "text", "description": "符号文字"}}
+            ]
+        },
+        "ocr": {
+            "document-version": "2018-11-28",
+            "labels": [
+                {"label": "text", "label-metadata": {"description": "普通文字"}},
+                {"label": "equipment_id", "label-metadata": {"description": "设备编号"}},
+                {"label": "dimension", "label-metadata": {"description": "尺寸标注"}},
+                {"label": "tag", "label-metadata": {"description": "仪表标签"}},
+                {"label": "note", "label-metadata": {"description": "备注说明"}}
+            ]
+        },
+        "mixed": {
+            "document-version": "2018-11-28", 
+            "labels": [
+                {"label": "text", "label-metadata": {"type": "text", "description": "普通文字"}},
+                {"label": "valve", "label-metadata": {"type": "symbol", "description": "阀门"}},
+                {"label": "pump", "label-metadata": {"type": "symbol", "description": "泵"}},
+                {"label": "tank", "label-metadata": {"type": "symbol", "description": "储罐"}},
+                {"label": "heat_exchanger", "label-metadata": {"type": "symbol", "description": "换热器"}},
+                {"label": "compressor", "label-metadata": {"type": "symbol", "description": "压缩机"}},
+                {"label": "filter", "label-metadata": {"type": "symbol", "description": "过滤器"}},
+                {"label": "instrument", "label-metadata": {"type": "symbol", "description": "仪表"}},
+                {"label": "equipment_id", "label-metadata": {"type": "text", "description": "设备编号"}},
+                {"label": "dimension", "label-metadata": {"type": "text", "description": "尺寸标注"}},
+                {"label": "tag", "label-metadata": {"type": "text", "description": "仪表标签"}}
+            ]
+        }
+    }
+    
+    config = label_configs.get(template_type, label_configs["detection"])
+    
+    # 保存到本地文件
+    config_file = f"label_config_{template_type}.json"
+    with open(config_file, 'w', encoding='utf-8') as f:
+        json.dump(config, f, ensure_ascii=False, indent=2)
+    
+    # 上传到 S3
+    s3_key = f"{Config.TEMPLATE_PREFIX}/label_config_{template_type}.json"
+    s3_client.upload_file(config_file, Config.BUCKET, s3_key)
+    
+    print(f"标签配置已上传: s3://{Config.BUCKET}/{s3_key}")
+    
+    # 删除本地文件
+    os.remove(config_file)
+    
+    return f"s3://{Config.BUCKET}/{s3_key}"
+    """上传标注模板到 S3"""
+    template_files = {
+        "ocr": "ocr_labeling_template.html",
+        "mixed": "pid_mixed_labeling_template.html", 
+        "detection": "pid_detection_template.html"
+    }
+    
+    template_file = template_files.get(template_type, "pid_detection_template.html")
+    template_path = Path(__file__).parent / template_file
+    
+    if not template_path.exists():
+        raise FileNotFoundError(f"模板文件不存在: {template_path}")
+    
+    s3_key = f"{Config.TEMPLATE_PREFIX}/{template_file}"
+    
+    print(f"上传模板 ({template_type}): s3://{Config.BUCKET}/{s3_key}")
+    s3_client.upload_file(str(template_path), Config.BUCKET, s3_key)
+    
+    return f"s3://{Config.BUCKET}/{s3_key}"
+
+
 def upload_template(s3_client, template_type: str = "detection"):
     """上传标注模板到 S3"""
     template_files = {
@@ -158,7 +249,7 @@ def create_manifest(s3_client, image_folder: str, output_path: str = "input.mani
     return f"s3://{Config.BUCKET}/{manifest_s3_key}"
 
 
-def create_labeling_job(sagemaker_client, manifest_uri: str, template_uri: str):
+def create_labeling_job(sagemaker_client, manifest_uri: str, template_uri: str, label_config_uri: str):
     """创建 Ground Truth 标注工作"""
     
     # 生成唯一的工作名称
@@ -169,7 +260,7 @@ def create_labeling_job(sagemaker_client, manifest_uri: str, template_uri: str):
     
     response = sagemaker_client.create_labeling_job(
         LabelingJobName=job_name,
-        LabelAttributeName="ocr-annotations",
+        LabelAttributeName="detections",
         
         InputConfig={
             'DataSource': {
@@ -184,6 +275,8 @@ def create_labeling_job(sagemaker_client, manifest_uri: str, template_uri: str):
         },
         
         RoleArn=Config.ROLE_ARN,
+        
+        LabelCategoryConfigS3Uri=label_config_uri,
         
         HumanTaskConfig={
             'WorkteamArn': Config.WORKTEAM_ARN,
@@ -328,13 +421,17 @@ def main():
         print("\n[Step 1] 上传标注模板...")
         template_uri = upload_template(clients['s3'], args.template)
         
+        # 1.5. 创建标签配置
+        print("\n[Step 1.5] 创建标签配置...")
+        label_config_uri = create_label_category_config(clients['s3'], args.template)
+        
         # 2. 创建 manifest
         print("\n[Step 2] 创建输入 manifest...")
         manifest_uri = create_manifest(clients['s3'], args.images, max_images=args.max_images)
         
         # 3. 创建标注工作
         print("\n[Step 3] 创建标注工作...")
-        job_name = create_labeling_job(clients['sagemaker'], manifest_uri, template_uri)
+        job_name = create_labeling_job(clients['sagemaker'], manifest_uri, template_uri, label_config_uri)
         
         print("\n" + "=" * 60)
         print("标注工作创建完成!")
