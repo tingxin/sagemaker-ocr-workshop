@@ -48,45 +48,65 @@ def get_clients():
     }
 
 
-def upload_template(s3_client):
+def upload_template(s3_client, template_type: str = "detection"):
     """上传标注模板到 S3"""
-    template_path = Path(__file__).parent / "ocr_labeling_template.html"
+    template_files = {
+        "ocr": "ocr_labeling_template.html",
+        "mixed": "pid_mixed_labeling_template.html", 
+        "detection": "pid_detection_template.html"
+    }
+    
+    template_file = template_files.get(template_type, "pid_detection_template.html")
+    template_path = Path(__file__).parent / template_file
     
     if not template_path.exists():
         raise FileNotFoundError(f"模板文件不存在: {template_path}")
     
-    s3_key = f"{Config.TEMPLATE_PREFIX}/ocr_labeling_template.html"
+    s3_key = f"{Config.TEMPLATE_PREFIX}/{template_file}"
     
-    print(f"上传模板到 s3://{Config.BUCKET}/{s3_key}")
+    print(f"上传模板 ({template_type}): s3://{Config.BUCKET}/{s3_key}")
     s3_client.upload_file(str(template_path), Config.BUCKET, s3_key)
     
     return f"s3://{Config.BUCKET}/{s3_key}"
 
 
-def create_manifest(s3_client, image_folder: str, output_path: str = "input.manifest"):
+def create_manifest(s3_client, image_folder: str, output_path: str = "input.manifest", max_images: int = None):
     """
     创建输入 manifest 文件
     
     Args:
         image_folder: 本地图片文件夹路径
         output_path: manifest 输出路径
+        max_images: 最大图片数量限制（用于测试）
     """
     image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff'}
     manifest_lines = []
     
     image_folder = Path(image_folder)
     
+    # 获取所有图片文件
+    all_images = []
     for img_file in image_folder.iterdir():
         if img_file.suffix.lower() in image_extensions:
-            # 上传图片到 S3
-            s3_key = f"{Config.INPUT_PREFIX}/images/{img_file.name}"
-            print(f"  上传: {img_file.name}")
-            s3_client.upload_file(str(img_file), Config.BUCKET, s3_key)
-            
-            # 添加到 manifest
-            manifest_lines.append(json.dumps({
-                "source-ref": f"s3://{Config.BUCKET}/{s3_key}"
-            }))
+            all_images.append(img_file)
+    
+    # 限制图片数量
+    if max_images and max_images < len(all_images):
+        print(f"📊 限制图片数量: {max_images} / {len(all_images)}")
+        all_images = all_images[:max_images]
+    else:
+        print(f"📊 处理所有图片: {len(all_images)}")
+    
+    for img_file in all_images:
+        # 上传图片到 S3
+        s3_key = f"{Config.INPUT_PREFIX}/images/{img_file.name}"
+        print(f"  上传: {img_file.name}")
+        s3_client.upload_file(str(img_file), Config.BUCKET, s3_key)
+        
+        # 添加到 manifest
+        manifest_lines.append(json.dumps({
+            "source-ref": f"s3://{Config.BUCKET}/{s3_key}"
+        }))
     
     # 保存 manifest
     manifest_content = "\n".join(manifest_lines)
@@ -137,6 +157,8 @@ def create_labeling_job(sagemaker_client, manifest_uri: str, template_uri: str):
                 'UiTemplateS3Uri': template_uri
             },
             
+            'PreHumanTaskLambdaArn': get_pre_human_task_lambda_arn(),
+            
             'TaskTitle': Config.TASK_TITLE,
             'TaskDescription': Config.TASK_DESCRIPTION,
             'NumberOfHumanWorkersPerDataObject': Config.WORKERS_PER_OBJECT,
@@ -158,6 +180,12 @@ def create_labeling_job(sagemaker_client, manifest_uri: str, template_uri: str):
     print(f"  ARN: {response['LabelingJobArn']}")
     
     return job_name
+
+
+def get_pre_human_task_lambda_arn():
+    """获取预处理 Lambda ARN"""
+    # 使用 AWS 内置的 BoundingBox 预处理函数
+    return f"arn:aws:lambda:{Config.REGION}:aws:function:PRE-BoundingBox"
 
 
 def get_consolidation_lambda_arn():
@@ -216,9 +244,12 @@ def main():
     parser.add_argument('action', choices=['create', 'status', 'list'],
                         help='操作类型: create=创建工作, status=查看状态, list=列出工作')
     parser.add_argument('--images', type=str, help='图片文件夹路径 (create 时需要)')
+    parser.add_argument('--max-images', type=int, help='最大图片数量限制 (用于测试)')
     parser.add_argument('--job-name', type=str, help='工作名称 (status 时需要)')
     parser.add_argument('--bucket', type=str, help='S3 bucket 名称')
     parser.add_argument('--region', type=str, help='AWS 区域')
+    parser.add_argument('--template', type=str, choices=['ocr', 'mixed', 'detection'], 
+                        default='detection', help='标注模板类型')
     
     args = parser.parse_args()
     
@@ -242,11 +273,11 @@ def main():
         
         # 1. 上传模板
         print("\n[Step 1] 上传标注模板...")
-        template_uri = upload_template(clients['s3'])
+        template_uri = upload_template(clients['s3'], args.template)
         
         # 2. 创建 manifest
         print("\n[Step 2] 创建输入 manifest...")
-        manifest_uri = create_manifest(clients['s3'], args.images)
+        manifest_uri = create_manifest(clients['s3'], args.images, max_images=args.max_images)
         
         # 3. 创建标注工作
         print("\n[Step 3] 创建标注工作...")

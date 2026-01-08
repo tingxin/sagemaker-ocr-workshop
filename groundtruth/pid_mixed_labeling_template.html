@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <script src="https://assets.crowd.aws/crowd-html-elements.js"></script>
+    <style>
+        .container {
+            display: flex;
+            height: 100vh;
+            font-family: Arial, sans-serif;
+        }
+
+        .image-panel {
+            flex: 3;
+            padding: 10px;
+        }
+
+        .annotation-panel {
+            flex: 1;
+            padding: 15px;
+            background: #f8f9fa;
+            border-left: 1px solid #ddd;
+            overflow-y: auto;
+        }
+
+        .mode-switch {
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #e3f2fd;
+            border-radius: 4px;
+        }
+
+        .mode-button {
+            padding: 8px 16px;
+            margin-right: 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .mode-button.active {
+            background: #2196f3;
+            color: white;
+        }
+
+        .annotation-item {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+
+        .text-input {
+            width: 100%;
+            padding: 6px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body>
+    <crowd-form>
+        <div class="container">
+            <div class="image-panel">
+                <crowd-bounding-box id="bbox-tool" name="annotations"
+                    src="{{ task.input.taskObject | grant_read_access }}" header="P&ID 图纸标注 - 符号 + 文字"
+                    labels="['text', 'valve', 'pump', 'tank', 'heat_exchanger', 'compressor', 'filter', 'instrument', 'equipment_id', 'dimension', 'tag']">
+                    <full-instructions header="P&ID 混合标注指南">
+                        <h3>标注类型</h3>
+                        <p><b>符号类别：</b></p>
+                        <ul>
+                            <li>valve - 阀门</li>
+                            <li>pump - 泵</li>
+                            <li>tank - 储罐</li>
+                            <li>heat_exchanger - 换热器</li>
+                            <li>compressor - 压缩机</li>
+                            <li>filter - 过滤器</li>
+                            <li>instrument - 仪表</li>
+                        </ul>
+
+                        <p><b>文字类别：</b></p>
+                        <ul>
+                            <li>text - 普通文字</li>
+                            <li>equipment_id - 设备编号</li>
+                            <li>dimension - 尺寸标注</li>
+                            <li>tag - 仪表标签</li>
+                        </ul>
+
+                        <h3>标注规范</h3>
+                        <ol>
+                            <li>符号：框选整个符号图形</li>
+                            <li>文字：框选文字区域并在右侧输入内容</li>
+                            <li>每个对象单独框选</li>
+                        </ol>
+                    </full-instructions>
+                </crowd-bounding-box>
+            </div>
+
+            <div class="annotation-panel">
+                <h3>标注详情</h3>
+
+                <div class="mode-switch">
+                    <button type="button" class="mode-button active" onclick="switchMode('mixed')">混合模式</button>
+                    <button type="button" class="mode-button" onclick="switchMode('text')">仅文字</button>
+                    <button type="button" class="mode-button" onclick="switchMode('symbol')">仅符号</button>
+                </div>
+
+                <div id="annotation-list">
+                    <div class="empty-state">请在左侧图像上进行标注</div>
+                </div>
+
+                <input type="hidden" id="transcriptions" name="transcriptions" value="{}">
+                <input type="hidden" id="annotation-types" name="annotation_types" value="{}">
+            </div>
+        </div>
+
+        <script>
+            let transcriptionData = {};
+            let annotationTypes = {};
+            let currentMode = 'mixed';
+
+            const bboxTool = document.getElementById('bbox-tool');
+            const annotationList = document.getElementById('annotation-list');
+
+            function switchMode(mode) {
+                currentMode = mode;
+                document.querySelectorAll('.mode-button').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                event.target.classList.add('active');
+
+                // 根据模式过滤显示的标签
+                const labels = {
+                    'mixed': ['text', 'valve', 'pump', 'tank', 'heat_exchanger', 'compressor', 'filter', 'instrument', 'equipment_id', 'dimension', 'tag'],
+                    'text': ['text', 'equipment_id', 'dimension', 'tag'],
+                    'symbol': ['valve', 'pump', 'tank', 'heat_exchanger', 'compressor', 'filter', 'instrument']
+                };
+
+                bboxTool.setAttribute('labels', JSON.stringify(labels[mode]));
+            }
+
+            function updateAnnotationPanel() {
+                setTimeout(() => {
+                    const annotations = bboxTool.value ? bboxTool.value.boundingBoxes : [];
+
+                    if (!annotations || annotations.length === 0) {
+                        annotationList.innerHTML = '<div class="empty-state">请在左侧图像上进行标注</div>';
+                        return;
+                    }
+
+                    let html = '';
+                    annotations.forEach((ann, idx) => {
+                        const isTextType = ['text', 'equipment_id', 'dimension', 'tag'].includes(ann.label);
+                        const savedText = transcriptionData[idx] || '';
+
+                        html += `
+              <div class="annotation-item">
+                <div><b>区域 ${idx + 1}</b> - ${ann.label}</div>
+                <div style="font-size: 12px; color: #666;">
+                  (${Math.round(ann.left)}, ${Math.round(ann.top)}) ${Math.round(ann.width)}x${Math.round(ann.height)}
+                </div>
+            `;
+
+                        if (isTextType) {
+                            html += `
+                <input type="text" 
+                       class="text-input" 
+                       placeholder="输入文字内容..."
+                       value="${savedText}"
+                       onchange="updateTranscription(${idx}, this.value)"
+                       style="margin-top: 8px;">
+              `;
+                        } else {
+                            html += `<div style="margin-top: 8px; color: #28a745;">✓ 符号标注完成</div>`;
+                        }
+
+                        html += '</div>';
+                    });
+
+                    annotationList.innerHTML = html;
+                }, 100);
+            }
+
+            function updateTranscription(index, text) {
+                transcriptionData[index] = text;
+                document.getElementById('transcriptions').value = JSON.stringify(transcriptionData);
+            }
+
+            // 监听变化
+            if (bboxTool) {
+                const observer = new MutationObserver(updateAnnotationPanel);
+                observer.observe(bboxTool, { attributes: true, childList: true, subtree: true });
+                setInterval(updateAnnotationPanel, 500);
+            }
+
+            document.addEventListener('DOMContentLoaded', updateAnnotationPanel);
+        </script>
+    </crowd-form>
+</body>
+
+</html>

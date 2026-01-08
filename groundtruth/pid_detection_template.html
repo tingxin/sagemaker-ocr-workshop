@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <script src="https://assets.crowd.aws/crowd-html-elements.js"></script>
+    <style>
+        :root {
+            --primary-color: #232f3e;
+            --secondary-color: #ff9900;
+            --border-color: #d5dbdb;
+        }
+
+        .container {
+            display: flex;
+            height: 100vh;
+            font-family: 'Amazon Ember', Arial, sans-serif;
+        }
+
+        .image-panel {
+            flex: 3;
+            padding: 10px;
+            overflow: auto;
+        }
+
+        .annotation-panel {
+            flex: 1;
+            min-width: 350px;
+            max-width: 450px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-left: 1px solid var(--border-color);
+            overflow-y: auto;
+        }
+
+        .category-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .category-title {
+            font-weight: bold;
+            color: var(--primary-color);
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid var(--secondary-color);
+        }
+
+        .label-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            font-size: 13px;
+        }
+
+        .label-item {
+            padding: 6px 8px;
+            background: #e3f2fd;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .stats {
+            background: var(--primary-color);
+            color: white;
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        .instructions {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 15px;
+            font-size: 13px;
+        }
+
+        .workflow-steps {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 15px;
+        }
+
+        .workflow-steps ol {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .workflow-steps li {
+            margin-bottom: 5px;
+        }
+
+        crowd-bounding-box {
+            width: 100%;
+        }
+    </style>
+</head>
+
+<body>
+    <crowd-form>
+        <div class="container">
+            <!-- 左侧：图像标注区 -->
+            <div class="image-panel">
+                <crowd-bounding-box id="bbox-tool" name="detections"
+                    src="{{ task.input.taskObject | grant_read_access }}" header="P&ID 图纸检测标注 - 符号 + 文字类型"
+                    labels="['valve', 'pump', 'tank', 'heat_exchanger', 'compressor', 'filter', 'instrument', 'reducer', 'flange', 'pipe', 'text_english', 'text_chinese', 'text_number', 'text_mixed', 'text_symbol']">
+                    <full-instructions header="P&ID 检测标注指南">
+                        <h3>标注策略</h3>
+                        <p>本标注采用 <b>检测 + 大模型识别</b> 的现代化方案：</p>
+                        <ul>
+                            <li><b>符号</b>：精确标注类别和位置</li>
+                            <li><b>文字</b>：只标注语言类型，具体内容由大模型识别</li>
+                        </ul>
+
+                        <h3>符号类别 (精确标注)</h3>
+                        <ul>
+                            <li><b>valve</b> - 各种阀门 (球阀、闸阀、调节阀等)</li>
+                            <li><b>pump</b> - 泵类设备 (离心泵、齿轮泵等)</li>
+                            <li><b>tank</b> - 储罐、容器</li>
+                            <li><b>heat_exchanger</b> - 换热器</li>
+                            <li><b>compressor</b> - 压缩机</li>
+                            <li><b>filter</b> - 过滤器、分离器</li>
+                            <li><b>instrument</b> - 仪表 (压力表、流量计等)</li>
+                            <li><b>reducer</b> - 异径管、变径</li>
+                            <li><b>flange</b> - 法兰连接</li>
+                            <li><b>pipe</b> - 管道连接点</li>
+                        </ul>
+
+                        <h3>文字类型 (语言分类)</h3>
+                        <ul>
+                            <li><b>text_english</b> - 英文文字 (如 PUMP, VALVE)</li>
+                            <li><b>text_chinese</b> - 中文文字 (如 泵, 阀门)</li>
+                            <li><b>text_number</b> - 纯数字 (如 101, 50, 2.5)</li>
+                            <li><b>text_mixed</b> - 混合文字 (如 P-101, DN50, 100°C)</li>
+                            <li><b>text_symbol</b> - 特殊符号文字 (如 Φ50, ±0.1)</li>
+                        </ul>
+
+                        <h3>标注规范</h3>
+                        <ol>
+                            <li><b>符号标注</b>：框选整个符号图形，选择准确类别</li>
+                            <li><b>文字标注</b>：框选文字区域，只需选择语言类型</li>
+                            <li><b>边界框</b>：尽量贴合对象边界，留少量边距</li>
+                            <li><b>重叠处理</b>：重叠的对象分别标注</li>
+                        </ol>
+
+                        <h3>跳过标注</h3>
+                        <ul>
+                            <li>纯装饰性线条、箭头</li>
+                            <li>图框边界线</li>
+                            <li>过于模糊无法识别的对象</li>
+                        </ul>
+                    </full-instructions>
+
+                    <short-instructions>
+                        <p><b>符号</b>：框选 + 选择类别</p>
+                        <p><b>文字</b>：框选 + 选择语言类型</p>
+                        <p>具体文字内容由 AI 自动识别</p>
+                    </short-instructions>
+                </crowd-bounding-box>
+            </div>
+
+            <!-- 右侧：标注指南面板 -->
+            <div class="annotation-panel">
+                <h3>🎯 标注指南</h3>
+
+                <div class="stats" id="stats">
+                    已标注: <span id="count">0</span> 个对象
+                </div>
+
+                <div class="instructions">
+                    <b>💡 标注理念：</b>检测定位 + AI识别内容，提高标注效率和准确性
+                </div>
+
+                <div class="workflow-steps">
+                    <b>🔄 工作流程：</b>
+                    <ol>
+                        <li>Ground Truth 标注 → 位置 + 类型</li>
+                        <li>训练检测模型 → 自动定位对象</li>
+                        <li>大模型识别 → 提取具体文字内容</li>
+                        <li>结合结果 → 完整的图纸理解</li>
+                    </ol>
+                </div>
+
+                <!-- 符号类别参考 -->
+                <div class="category-section">
+                    <div class="category-title">🔧 符号类别</div>
+                    <div class="label-grid">
+                        <div class="label-item">valve 阀门</div>
+                        <div class="label-item">pump 泵</div>
+                        <div class="label-item">tank 储罐</div>
+                        <div class="label-item">heat_exchanger 换热器</div>
+                        <div class="label-item">compressor 压缩机</div>
+                        <div class="label-item">filter 过滤器</div>
+                        <div class="label-item">instrument 仪表</div>
+                        <div class="label-item">reducer 异径管</div>
+                        <div class="label-item">flange 法兰</div>
+                        <div class="label-item">pipe 管道</div>
+                    </div>
+                </div>
+
+                <!-- 文字类型参考 -->
+                <div class="category-section">
+                    <div class="category-title">📝 文字类型</div>
+                    <div class="label-grid">
+                        <div class="label-item">text_english 英文</div>
+                        <div class="label-item">text_chinese 中文</div>
+                        <div class="label-item">text_number 数字</div>
+                        <div class="label-item">text_mixed 混合</div>
+                        <div class="label-item">text_symbol 符号</div>
+                    </div>
+                </div>
+
+                <div style="background: #f0f8ff; padding: 10px; border-radius: 4px; font-size: 12px;">
+                    <b>🚀 优势：</b>
+                    <ul style="margin: 5px 0; padding-left: 15px;">
+                        <li>标注效率高（无需输入文字）</li>
+                        <li>大模型识别准确性更好</li>
+                        <li>支持多语言和特殊符号</li>
+                        <li>便于后续模型训练</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            const bboxTool = document.getElementById('bbox-tool');
+            const countSpan = document.getElementById('count');
+
+            function updateStats() {
+                setTimeout(() => {
+                    const annotations = bboxTool.value ? bboxTool.value.boundingBoxes : [];
+                    countSpan.textContent = annotations ? annotations.length : 0;
+                }, 100);
+            }
+
+            // 监听标注变化
+            if (bboxTool) {
+                const observer = new MutationObserver(updateStats);
+                observer.observe(bboxTool, { attributes: true, childList: true, subtree: true });
+                setInterval(updateStats, 500);
+            }
+
+            document.addEventListener('DOMContentLoaded', updateStats);
+        </script>
+    </crowd-form>
+</body>
+
+</html>
