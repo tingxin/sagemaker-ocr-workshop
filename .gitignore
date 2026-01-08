@@ -1,1 +1,38 @@
 .vscode/settings.json
+umbs.dbStore
+Thtemp
+.DS_
+*.tmp
+*.时文件
+
+# 临og
+logs/日志文件
+*.l
+
+# iffbmp
+*.t
+*.peg*.jg
+*.png
+t_*/
+*.jpatase数据文件
+d/
+
+# 
+.venvnv/
+venv/on
+eythyd
+.P
+*.p.pyc
+*.pyo_/
+*che___pycaython
+/
+
+# P 配置
+.aws AWSmple
+
+#.exav.*
+!.env.en
+*.env
+
+data/dataset_pid/*
+变量文件# 环境
