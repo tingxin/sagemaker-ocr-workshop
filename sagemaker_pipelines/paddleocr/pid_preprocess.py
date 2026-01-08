@@ -40,19 +40,44 @@ def process_pid_data(input_dir: str, train_output: str, val_output: str):
         logger.error(f"未找到 paddleocr_format 目录: {paddleocr_dir}")
         return
     
+    # 处理训练数据
+    train_label_file = paddleocr_dir / "label_train.txt"
+    val_label_file = paddleocr_dir / "label_val.txt"
+    
+    if not train_label_file.exists():
+        logger.error(f"未找到训练标签文件: {train_label_file}")
+        return
+    
+    # 读取训练数据
+    with open(train_label_file, 'r', encoding='utf-8') as f:
+        train_lines = f.readlines()
+    
+    logger.info(f"训练数据: {len(train_lines)} 张图片")
+    
+    # 如果没有验证数据，从训练数据中分割
+    if not val_label_file.exists() or os.path.getsize(val_label_file) == 0:
+        logger.info("未找到验证数据，从训练数据中分割 20% 作为验证集")
+        
+        import random
+        random.shuffle(train_lines)
+        
+        # 80% 训练，20% 验证
+        split_idx = int(len(train_lines) * 0.8)
+        actual_train_lines = train_lines[:split_idx]
+        val_lines = train_lines[split_idx:]
+        
+        logger.info(f"分割后 - 训练: {len(actual_train_lines)}, 验证: {len(val_lines)}")
+    else:
+        with open(val_label_file, 'r', encoding='utf-8') as f:
+            val_lines = f.readlines()
+        actual_train_lines = train_lines
+        logger.info(f"使用现有验证数据: {len(val_lines)} 张图片")
+    
     # 处理训练和验证数据
-    for split in ['train', 'val']:
-        label_file = paddleocr_dir / f"label_{split}.txt"
-        
-        if not label_file.exists():
-            logger.warning(f"标签文件不存在: {label_file}")
-            continue
-        
-        output_dir = train_output if split == 'train' else val_output
-        
-        # 读取标签文件
-        with open(label_file, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
+    for split, lines, output_dir in [
+        ('train', actual_train_lines, train_output), 
+        ('val', val_lines, val_output)
+    ]:
         
         processed_data = []
         
@@ -102,8 +127,11 @@ def process_pid_data(input_dir: str, train_output: str, val_output: str):
             df.to_parquet(output_file, index=False)
             logger.info(f"保存 {split} 数据: {len(processed_data)} 条 -> {output_file}")
         
-        # 复制原始标签文件
-        shutil.copy(label_file, Path(output_dir) / f"label_{split}.txt")
+        # 保存标签文件
+        label_output_file = Path(output_dir) / f"label_{split}.txt"
+        with open(label_output_file, 'w', encoding='utf-8') as f:
+            f.writelines(lines)
+        logger.info(f"保存 {split} 标签文件: {label_output_file}")
     
     logger.info("数据预处理完成")
 

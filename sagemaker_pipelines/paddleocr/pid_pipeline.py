@@ -156,8 +156,7 @@ def get_pid_detection_pipeline(
             region=region,
             version="1.12.0",
             py_version="py38",
-            instance_type=training_instance_type,
-            accelerator_type="gpu"
+            instance_type=training_instance_type
         ),
         instance_type=training_instance_type,
         instance_count=1,

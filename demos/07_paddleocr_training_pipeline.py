@@ -63,15 +63,26 @@ def main():
     with open(train_labels, 'r', encoding='utf-8') as f:
         train_count = len(f.readlines())
     
-    with open(val_labels, 'r', encoding='utf-8') as f:
-        val_count = len(f.readlines())
+    val_count = 0
+    if val_labels.exists():
+        with open(val_labels, 'r', encoding='utf-8') as f:
+            val_count = len(f.readlines())
     
     print(f"📊 训练图片数量: {train_count}")
     print(f"📊 验证图片数量: {val_count}")
     
+    if val_count == 0:
+        print("⚠️  注意: 验证数据为空，将从训练数据中自动分割 20% 作为验证集")
+    
     if train_count == 0:
         print("❌ 错误: 训练数据为空")
         return
+    
+    if train_count < 2:
+        print("⚠️  警告: 训练数据太少，建议至少有 10+ 张图片进行有效训练")
+        response = input("是否继续? (y/N): ")
+        if response.lower() != 'y':
+            return
     
     # 创建 SageMaker session
     print("\n🔧 创建 SageMaker Pipeline...")
@@ -117,8 +128,8 @@ def main():
             parameters={
                 "InputDataUrl": s3_input_path,
                 "TrainingInstanceType": "ml.g4dn.xlarge",  # GPU 实例
-                "Epochs": 30,  # 减少训练轮数用于测试
-                "BatchSize": 4,  # 减少批次大小
+                "Epochs": 10,  # 减少训练轮数，因为数据量小
+                "BatchSize": 2,  # 小批次大小适合小数据集
                 "LearningRate": 0.001
             }
         )
@@ -134,7 +145,7 @@ def main():
         print(f"执行 ID: {execution.arn.split('/')[-1]}")
         print(f"输入数据: {s3_input_path}")
         print(f"训练实例: ml.g4dn.xlarge")
-        print(f"训练参数: epochs=30, batch_size=4, lr=0.001")
+        print(f"训练参数: epochs=10, batch_size=2, lr=0.001")
         
         print("\n📝 后续步骤:")
         print("1. 在 SageMaker 控制台监控 Pipeline 执行状态")
