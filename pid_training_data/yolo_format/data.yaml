@@ -1,0 +1,9 @@
+names:
+- 符号
+- 英文
+- '设备 '
+nc: 3
+path: /Users/fugui/Work/project/sagemaker-ocr-workshop/pid_training_data/yolo_format
+test: test
+train: train
+val: val

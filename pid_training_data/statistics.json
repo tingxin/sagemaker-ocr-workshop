@@ -1,0 +1,15 @@
+{
+  "total_images": 5,
+  "total_detections": 36,
+  "avg_detections_per_image": 7.2,
+  "class_mapping": {
+    "0": "符号",
+    "1": "设备 ",
+    "3": "英文"
+  },
+  "class_distribution": {
+    "符号": 20,
+    "英文": 2,
+    "设备 ": 14
+  }
+}
