@@ -13,29 +13,64 @@ from pathlib import Path
 # ============ 配置 ============
 
 class Config:
-    # AWS 配置
-    REGION = "us-west-2"  # 修改为你的区域
+    def __init__(self):
+        # 安装 python-dotenv 如果没有的话
+        try:
+            from dotenv import load_dotenv
+        except ImportError:
+            print("安装 python-dotenv...")
+            import subprocess
+            import sys
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "python-dotenv"])
+            from dotenv import load_dotenv
+        
+        import os
+        
+        # 加载 .env 文件
+        env_path = Path(__file__).parent / '.env'
+        load_dotenv(env_path)
+        
+        # AWS 配置
+        self.REGION = os.getenv('AWS_REGION', 'us-east-2')
+        
+        # S3 配置
+        self.BUCKET = os.getenv('S3_BUCKET')
+        self.INPUT_PREFIX = os.getenv('INPUT_PREFIX', 'groundtruth/input')
+        self.OUTPUT_PREFIX = os.getenv('OUTPUT_PREFIX', 'groundtruth/output')
+        self.TEMPLATE_PREFIX = os.getenv('TEMPLATE_PREFIX', 'groundtruth/templates')
+        
+        # 标注工作配置
+        self.JOB_NAME_PREFIX = os.getenv('JOB_NAME_PREFIX', 'pid-ocr-labeling')
+        
+        # IAM Role
+        self.ROLE_ARN = os.getenv('SAGEMAKER_ROLE_ARN')
+        
+        # 标注团队
+        self.WORKTEAM_ARN = os.getenv('WORKTEAM_ARN')
+        
+        # 任务配置
+        self.TASK_TITLE = os.getenv('TASK_TITLE', 'P&ID 图纸标注')
+        self.TASK_DESCRIPTION = os.getenv('TASK_DESCRIPTION', '框选图纸中的对象并选择类别')
+        self.TASK_TIME_LIMIT = int(os.getenv('TASK_TIME_LIMIT', '900'))
+        self.WORKERS_PER_OBJECT = int(os.getenv('WORKERS_PER_OBJECT', '1'))
+        
+        # 验证必需配置
+        self._validate_config()
     
-    # S3 配置
-    BUCKET = "your-bucket-name"  # 修改为你的 bucket
-    INPUT_PREFIX = "groundtruth/input"
-    OUTPUT_PREFIX = "groundtruth/output"
-    TEMPLATE_PREFIX = "groundtruth/templates"
-    
-    # 标注工作配置
-    JOB_NAME_PREFIX = "pid-ocr-labeling"
-    
-    # IAM Role (需要 SageMaker 执行权限)
-    ROLE_ARN = "arn:aws:iam::YOUR_ACCOUNT:role/SageMakerExecutionRole"
-    
-    # 标注团队 (私有团队 ARN)
-    WORKTEAM_ARN = "arn:aws:sagemaker:REGION:ACCOUNT:workteam/private-crowd/your-team"
-    
-    # 任务配置
-    TASK_TITLE = "P&ID 图纸文字标注"
-    TASK_DESCRIPTION = "框选图纸中的文字区域并输入对应的文字内容"
-    TASK_TIME_LIMIT = 900  # 15 分钟
-    WORKERS_PER_OBJECT = 1  # 每张图片的标注人数
+    def _validate_config(self):
+        """验证必需的配置项"""
+        required_configs = {
+            'S3_BUCKET': self.BUCKET,
+            'SAGEMAKER_ROLE_ARN': self.ROLE_ARN,
+            'WORKTEAM_ARN': self.WORKTEAM_ARN
+        }
+        
+        missing = [key for key, value in required_configs.items() if not value]
+        if missing:
+            raise ValueError(f"缺少必需的环境变量: {', '.join(missing)}")
+
+# 全局配置实例
+Config = Config()
 
 
 # ============ 工具函数 ============
@@ -184,14 +219,32 @@ def create_labeling_job(sagemaker_client, manifest_uri: str, template_uri: str):
 
 def get_pre_human_task_lambda_arn():
     """获取预处理 Lambda ARN"""
-    # 使用 AWS 内置的 BoundingBox 预处理函数
-    return f"arn:aws:lambda:{Config.REGION}:aws:function:PRE-BoundingBox"
+    # AWS 内置 Lambda 函数的账号 ID 映射
+    lambda_account_ids = {
+        'us-east-1': '432418664414',
+        'us-east-2': '266458841044', 
+        'us-west-2': '081040173940',
+        'eu-west-1': '568282634449',
+        'ap-northeast-1': '477331159723'
+    }
+    
+    account_id = lambda_account_ids.get(Config.REGION, '432418664414')
+    return f"arn:aws:lambda:{Config.REGION}:{account_id}:function:PRE-BoundingBox"
 
 
 def get_consolidation_lambda_arn():
     """获取标注合并 Lambda ARN"""
-    # 使用 AWS 内置的 BoundingBox 合并函数
-    return f"arn:aws:lambda:{Config.REGION}:aws:function:ACS-BoundingBox"
+    # AWS 内置 Lambda 函数的账号 ID 映射
+    lambda_account_ids = {
+        'us-east-1': '432418664414',
+        'us-east-2': '266458841044',
+        'us-west-2': '081040173940', 
+        'eu-west-1': '568282634449',
+        'ap-northeast-1': '477331159723'
+    }
+    
+    account_id = lambda_account_ids.get(Config.REGION, '432418664414')
+    return f"arn:aws:lambda:{Config.REGION}:{account_id}:function:ACS-BoundingBox"
 
 
 def check_job_status(sagemaker_client, job_name: str):
