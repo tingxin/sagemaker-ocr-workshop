@@ -179,10 +179,11 @@ def upload_template(s3_client, template_type: str = "detection"):
     template_files = {
         "ocr": "ocr_labeling_template.html",
         "mixed": "pid_mixed_labeling_template.html", 
-        "detection": "pid_detection_template.html"
+        "detection": "pid_simple_template.html",
+        "simple": "pid_simple_template.html"
     }
     
-    template_file = template_files.get(template_type, "pid_detection_template.html")
+    template_file = template_files.get(template_type, "pid_simple_template.html")
     template_path = Path(__file__).parent / template_file
     
     if not template_path.exists():

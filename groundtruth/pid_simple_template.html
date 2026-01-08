@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <script src="https://assets.crowd.aws/crowd-html-elements.js"></script>
+</head>
+
+<body>
+    <crowd-form>
+        <crowd-bounding-box name="boundingBoxes" src="{{ task.input.taskObject | grant_read_access }}"
+            header="P&ID 图纸标注"
+            labels="['valve', 'pump', 'tank', 'heat_exchanger', 'compressor', 'filter', 'instrument', 'reducer', 'flange', 'pipe', 'text_english', 'text_chinese', 'text_number', 'text_mixed', 'text_symbol']">
+            <full-instructions header="标注指南">
+                <h3>符号类别</h3>
+                <ul>
+                    <li><b>valve</b> - 阀门</li>
+                    <li><b>pump</b> - 泵</li>
+                    <li><b>tank</b> - 储罐</li>
+                    <li><b>heat_exchanger</b> - 换热器</li>
+                    <li><b>compressor</b> - 压缩机</li>
+                    <li><b>filter</b> - 过滤器</li>
+                    <li><b>instrument</b> - 仪表</li>
+                    <li><b>reducer</b> - 异径管</li>
+                    <li><b>flange</b> - 法兰</li>
+                    <li><b>pipe</b> - 管道</li>
+                </ul>
+
+                <h3>文字类别</h3>
+                <ul>
+                    <li><b>text_english</b> - 英文文字</li>
+                    <li><b>text_chinese</b> - 中文文字</li>
+                    <li><b>text_number</b> - 数字</li>
+                    <li><b>text_mixed</b> - 混合文字</li>
+                    <li><b>text_symbol</b> - 符号文字</li>
+                </ul>
+
+                <h3>标注规范</h3>
+                <ol>
+                    <li>符号：框选整个符号图形</li>
+                    <li>文字：框选文字区域，选择语言类型</li>
+                    <li>每个对象单独框选</li>
+                </ol>
+            </full-instructions>
+
+            <short-instructions>
+                框选对象并选择正确的类别
+            </short-instructions>
+        </crowd-bounding-box>
+    </crowd-form>
+</body>
+
+</html>
